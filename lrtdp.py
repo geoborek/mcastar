@@ -194,6 +194,9 @@ class Vfunction:
 
             if k % 1000 == 0:
                 print(state, k, actions[fst], actions[snd], (up_vals-low_vals)[fst])
+
+        # if up_vals[fst] > low_vals[snd]:
+        #     print("LUCB proof!")
         best_action = actions[fst]
         expected_val = np.inner(self.outcomes[(state, best_action)], target_vals[best_action])/np.sum(self.outcomes[(state, best_action)])
 
@@ -276,7 +279,7 @@ class Vfunction:
                 s = grid.State(x, y)
                 if not self.env.is_terminal(s):
                 # elif s in vfunc.values.keys():
-                    best_actions[y][x], _ = self.get_best_action(s)
+                    best_actions[y][x], _ = self.LUCB(s) #self.get_best_action(s)
 
         for row in best_actions:
             for a in row:
@@ -328,7 +331,7 @@ if __name__ == '__main__':
     state = env.start #grid.State(0,2)
     print(vfunc.LUCB(state))
     lrtdp(state, env, vfunc, eps=0.1)
-    print(vfunc.get_best_action(state, debug=True))
+    print(vfunc.LUCB(state))
     # print(vfunc.get_Q_value(state, env.actions[3], debug=False, sampled=True))
     vfunc.display_best_actions()
     vfunc.display_vfunc()
