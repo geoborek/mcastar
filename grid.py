@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import astar as search
 
+SAFE = False
+
 COLOR_START = 20
 COLOR_GOAL = 30
 COLOR_WALL = 10
@@ -104,8 +106,8 @@ class Environment:
             self.map = COLOR_WALL*np.random.binomial(1,prob,(self.height, self.width))
         
         if type == 0:
-            # self.map[self.width // 2+2, 0:(2*self.width//3)] = COLOR_WALL
-            self.map[self.width // 2-2, 3:] = COLOR_WALL
+            # self.map[self.width // 2+4, 0:(2*self.width//3)] = COLOR_WALL
+            self.map[self.width // 2-4, 3:] = COLOR_WALL
             self.map[(self.width // 2)-1:(self.width // 2)+1, :] = 0
         elif type == 1:
             self.map[self.width // 2+1, 0:(2*self.width//3)] = COLOR_WALL
@@ -150,7 +152,7 @@ class Environment:
     def is_inside(self, state):
         return state.x >= 0 and state.x < self.width and state.y >=0 and state.y < self.height
     
-    def project(self, state, safe=True):
+    def project(self, state, safe=SAFE):
         if not safe:
             return state
         if self.is_inside(state):
@@ -193,7 +195,7 @@ class Environment:
     # def get_successors(self, state, action):
     #     return [self.project(s) for s in action.successors(state)]
     
-    def get_sampled_successor(self, state, action, execute=False, safe=True):
+    def get_sampled_successor(self, state, action, execute=False, safe=SAFE):
         t, cost = action.sample(state)
         if safe and self.is_wall(self.project(t)):
             return state, cost
@@ -209,7 +211,8 @@ class Environment:
             else:
                 return [self.get_sampled_successor(state, action, execute=False) for i in range(num_samples)]
         else:
-            return [self.project(s) for s in action.successors(state)]
+            succs = [self.project(s) for s in action.successors(state)]
+            return succs
 
     def get_extrem_successor(self, state, action, worst=True, beta=0.1):
         succs = self.get_successors(state, action)

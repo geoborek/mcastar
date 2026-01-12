@@ -77,7 +77,7 @@ def mcts(state, env, qfunc, iterations=2000, exploration=0.5):
         trace, terminal_cost, _ = rollout(state, env, qfunc, state_visited, mode="exploration", exploration=exploration)
         update(trace, qfunc, state_visited, terminal_cost)
         if (state, env.actions[0]) in qfunc.values:
-            pvals[i] = qfunc.values[(state, env.actions[3])]
+            pvals[i] = qfunc.values[(state, env.actions[0])]
             # if i % 5 == 0:
             #     print(terminal_cost)
             #     print(pvals[i])
@@ -238,8 +238,8 @@ if __name__ == '__main__':
 
     np.random.seed(3)
 
-    env = grid.Environment(7, 7, grid.ACTIONS)
-    env.generate_map(type=3, noise=False, prob=0.05)
+    env = grid.Environment(20, 20, grid.ACTIONS)
+    env.generate_map(type=0, noise=False, prob=0.05)
     env.display()
 
     # env = test.env

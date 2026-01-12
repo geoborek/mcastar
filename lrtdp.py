@@ -79,6 +79,13 @@ def lrtdp(state, env, vfunc, eps=0.01, num_iter=100):
         lrtdp_trial(state, solved, env, vfunc, eps)
         i += 1
 
+def get_two_best(vals):
+    arr = np.copy(vals)
+    fst = np.argmin(arr)
+    arr[fst] = np.inf
+    snd = np.argmin(arr)
+    return fst, snd
+
 class Vfunction:
     def __init__(self, env, vfunc_fixed, hfunc, hfunc_opp) -> None:
         self.env = env
@@ -87,6 +94,8 @@ class Vfunction:
         self.hfunc_opp = hfunc_opp
         self.env = env
         self.values = {}
+        self.visited = {}
+        self.outcomes = {}
 
     def evaluate(self, state, player=1):
         if self.env.is_terminal(state):
@@ -98,10 +107,10 @@ class Vfunction:
                 return heur(state, self.env, self.vfunc_fixed, self.hfunc, player=player)
             else:
                 return heur(state, self.env, self.vfunc_fixed, self.hfunc_opp, player=player)
-            
-    def get_Q_value(self, state, action, sampled=False, debug=False, player=1):
+       
+    def get_Q_value(self, state, action, sampled=False, debug=False, num_samples=1, player=1):
         if sampled:
-            succs = self.env.get_successors(state, action, sampled=True, num_samples=200)
+            succs = self.env.get_successors(state, action, sampled=True, num_samples=num_samples)
             vals = np.array([c+self.evaluate(s, player=player) for s, c in succs])
             if debug:
                 print(f"State: {state}")
@@ -121,14 +130,83 @@ class Vfunction:
                 print(f"Costs: {action.costs}")
                 print(f"Probs: {ps}")
             return np.sum((vals + action.costs) * ps)
-    
+
+    def get_confidence_bound(self, vals, n, confidence=0.1, threshold=1000):
+        m = np.max(vals)
+        if m >= threshold:
+            return np.inf
+        
+        delta = np.max(vals)- np.min(vals)
+        return delta*np.sqrt(np.log(1/confidence)/n)
+
+    def update_outcome(self, state, action):
+        succs = self.env.get_successors(state, action, sampled=False)
+        t, _ = self.env.get_sampled_successor(state, action, safe=False)
+        if (state, action) not in self.visited:
+            self.visited[(state, action)] = 1
+            distribution = np.zeros(len(succs))
+            distribution[succs.index(t)] = 1
+            self.outcomes[(state, action)] = distribution
+        else:
+            self.visited[(state, action)] += 1
+            self.outcomes[(state, action)][succs.index(t)] += 1
+
+    def LUCB(self, state, eps=0.5):
+        actions = self.env.get_applicable(state)
+        up_vals = np.zeros(len(actions))
+        low_vals = np.zeros(len(actions))
+        confidence = np.zeros(len(actions))
+        target_vals = {}
+        succs = {}
+
+        # try each action once
+        for i, a in enumerate(actions):
+            succs[a] = self.env.get_successors(state, a, sampled=False)
+            target_vals[a] = np.array([c+self.evaluate(t) for t, c in zip(succs[a], a.costs)])
+            self.update_outcome(state, a)
+            confidence[i] = self.get_confidence_bound(target_vals[a], self.visited[(state, a)])
+            expected_val = np.inner(self.outcomes[(state, a)], target_vals[a])/np.sum(self.outcomes[(state, a)])
+            if confidence[i] < np.inf:
+                low_vals[i] = expected_val - confidence[i]        
+                up_vals[i] = expected_val + confidence[i]        
+            else: 
+                low_vals[i] = np.inf        
+                up_vals[i] = np.inf
+
+        fst, snd = get_two_best(low_vals)
+        k = 0
+        while up_vals[fst] > low_vals[snd] and (up_vals[fst]-low_vals[fst]) > eps:
+            k += 1
+            self.update_outcome(state, actions[fst])
+            self.update_outcome(state, actions[snd])
+
+            for i, a in enumerate(actions):
+                confidence[i] = self.get_confidence_bound(target_vals[a], self.visited[(state, a)])
+                expected_val = np.inner(self.outcomes[(state, a)], target_vals[a])/np.sum(self.outcomes[(state, a)])
+                if confidence[i] < np.inf:
+                    low_vals[i] = expected_val - confidence[i]        
+                    up_vals[i] = expected_val + confidence[i]        
+                else: 
+                    low_vals[i] = np.inf        
+                    up_vals[i] = np.inf
+
+            fst, snd = get_two_best(low_vals)
+
+            if k % 1000 == 0:
+                print(state, k, actions[fst], actions[snd], (up_vals-low_vals)[fst])
+        best_action = actions[fst]
+        expected_val = np.inner(self.outcomes[(state, best_action)], target_vals[best_action])/np.sum(self.outcomes[(state, best_action)])
+
+        return actions[fst], expected_val
+
     def get_best_action(self, state, debug=False, regularized=False, beta=1, player=1):
         min_h = np.inf
         best_action = None
         actions = self.env.get_applicable(state)
         vals = np.zeros(len(actions))
+
         for i, a in enumerate(actions):
-            h = self.get_Q_value(state, a, sampled=True, debug=False, player=player)
+            h = self.get_Q_value(state, a, sampled=True, debug=False, num_samples=1, player=player)
             vals[i] = h
             if debug:
                 print(f"Action: {a}")
@@ -152,7 +230,8 @@ class Vfunction:
         return worst_action, max_h
 
     def Bellman_update(self, state, regularized=False):
-        _, val = self.get_best_action(state)
+        # _, val = self.get_best_action(state)
+        _, val = self.LUCB(state)
         self.values[state] = val
         return val
     
@@ -161,7 +240,7 @@ class Vfunction:
             return 0
         else:
             val = self.evaluate(state) 
-            _, new_val = self.get_best_action(state)
+            _, new_val = self.LUCB(state) #self.get_best_action(state)
             return abs(new_val-val) 
 
     def value_iteration(self, eps=0.01):
@@ -232,26 +311,27 @@ def heur(state, env, vfunc_fixed, hfunc, player=1):
 
 if __name__ == '__main__':
 
-    np.random.seed(2)
+    np.random.seed(3)
 
-    env = grid.Environment(7, 7, grid.ACTIONS)
-    env.generate_map(type=3, noise=True, prob=0.03)
+    env = grid.Environment(20, 20, grid.ACTIONS)
+    env.generate_map(type=0, noise=True, prob=0.02)
 
-    # env.display()
+    env.display()
 
     vfunc_fixed = grid.Vfunction(env)
-    hfunc = search.Hfunction(env, samples=10)
+    hfunc = search.Hfunction(env, samples=3)
     vfunc = Vfunction(env, vfunc_fixed, hfunc, hfunc)
 
     # val = planning.expected_astar(env.start, env, vfunc, hfunc, noise=0)
     # print(val)
 
     state = env.start #grid.State(0,2)
-    lrtdp(state, env, vfunc, eps=0.001)
+    print(vfunc.LUCB(state))
+    lrtdp(state, env, vfunc, eps=0.1)
     print(vfunc.get_best_action(state, debug=True))
     # print(vfunc.get_Q_value(state, env.actions[3], debug=False, sampled=True))
-    # vfunc.display_best_actions()
-    # vfunc.display_vfunc()
+    vfunc.display_best_actions()
+    vfunc.display_vfunc()
 
     # vfunc2 = grid.Vfunction(env)
     # vfunc2.value_iteration(eps=0.01)
