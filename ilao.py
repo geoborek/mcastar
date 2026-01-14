@@ -172,10 +172,10 @@ def heur(state):
 
 if __name__ == '__main__':
 
-    np.random.seed(4)
+    np.random.seed(3)
 
-    env = grid.Environment(20, 20, grid.ACTIONS)
-    env.generate_map(type=0, noise=True, prob=0.05)
+    env = grid.Environment(7, 7, grid.ACTIONS, safe=True)
+    env.generate_map(type=3, noise=False, prob=0.05)
 
     # env.display()
 

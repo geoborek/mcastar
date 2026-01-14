@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import grid
 import astar as search
 import planning
+import test_env as test
 
 SAMPLED = True
 
@@ -72,8 +73,10 @@ def lrtdp(state, env, vfunc, eps=0.01, num_iter=100):
     solved = set()
     i = 0
     while state not in solved:
-        if i % 10 == 0:
+    # for k in range(10):
+        if i % 1 == 0:
             print(f"Iteration: {i}, residual: {vfunc.residual(state)}")
+            # print(vfunc.get_Q_value(env.start, env.actions[0]))
             # print(solved)
 
         lrtdp_trial(state, solved, env, vfunc, eps)
@@ -87,11 +90,13 @@ def get_two_best(vals):
     return fst, snd
 
 class Vfunction:
-    def __init__(self, env, vfunc_fixed, hfunc, hfunc_opp) -> None:
+    def __init__(self, env, vfunc_fixed, hfunc, hfunc_opp, confidence=0.1, eps=0.1) -> None:
         self.env = env
         self.vfunc_fixed = vfunc_fixed
         self.hfunc = hfunc
         self.hfunc_opp = hfunc_opp
+        self.confidence = confidence
+        self.eps = eps
         self.env = env
         self.values = {}
         self.visited = {}
@@ -131,17 +136,17 @@ class Vfunction:
                 print(f"Probs: {ps}")
             return np.sum((vals + action.costs) * ps)
 
-    def get_confidence_bound(self, vals, n, confidence=0.1, threshold=1000):
+    def get_confidence_bound(self, vals, n, threshold=1000):
         m = np.max(vals)
         if m >= threshold:
             return np.inf
         
         delta = np.max(vals)- np.min(vals)
-        return delta*np.sqrt(np.log(1/confidence)/n)
+        return delta*np.sqrt(0.5*np.log(1/self.confidence)/n)
 
     def update_outcome(self, state, action):
         succs = self.env.get_successors(state, action, sampled=False)
-        t, _ = self.env.get_sampled_successor(state, action, safe=False)
+        t, _ = self.env.get_sampled_successor(state, action)
         if (state, action) not in self.visited:
             self.visited[(state, action)] = 1
             distribution = np.zeros(len(succs))
@@ -151,7 +156,7 @@ class Vfunction:
             self.visited[(state, action)] += 1
             self.outcomes[(state, action)][succs.index(t)] += 1
 
-    def LUCB(self, state, eps=0.5):
+    def LUCB(self, state):
         actions = self.env.get_applicable(state)
         up_vals = np.zeros(len(actions))
         low_vals = np.zeros(len(actions))
@@ -175,7 +180,7 @@ class Vfunction:
 
         fst, snd = get_two_best(low_vals)
         k = 0
-        while up_vals[fst] > low_vals[snd] and (up_vals[fst]-low_vals[fst]) > eps:
+        while up_vals[fst] > low_vals[snd] and (up_vals[fst]-low_vals[fst]) > self.eps:
             k += 1
             self.update_outcome(state, actions[fst])
             self.update_outcome(state, actions[snd])
@@ -316,25 +321,25 @@ if __name__ == '__main__':
 
     np.random.seed(3)
 
-    env = grid.Environment(20, 20, grid.ACTIONS)
-    env.generate_map(type=0, noise=True, prob=0.02)
-
+    env = grid.Environment(7, 7, grid.ACTIONS, safe=True)
+    env.generate_map(type=3, noise=False, prob=0.02)
     env.display()
+
+    # env = test.env
 
     vfunc_fixed = grid.Vfunction(env)
     hfunc = search.Hfunction(env, samples=3)
-    vfunc = Vfunction(env, vfunc_fixed, hfunc, hfunc)
+    vfunc = Vfunction(env, vfunc_fixed, hfunc, hfunc, confidence=0.1, eps=0.1)
 
     # val = planning.expected_astar(env.start, env, vfunc, hfunc, noise=0)
     # print(val)
 
     state = env.start #grid.State(0,2)
-    print(vfunc.LUCB(state))
     lrtdp(state, env, vfunc, eps=0.1)
     print(vfunc.LUCB(state))
-    # print(vfunc.get_Q_value(state, env.actions[3], debug=False, sampled=True))
+    # print(vfunc.get_Q_value(state, env.actions[3], debug=True, sampled=True))
     vfunc.display_best_actions()
-    vfunc.display_vfunc()
+    # vfunc.display_vfunc()
 
     # vfunc2 = grid.Vfunction(env)
     # vfunc2.value_iteration(eps=0.01)

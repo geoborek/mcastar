@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import astar as search
 
-SAFE = False
-
 COLOR_START = 20
 COLOR_GOAL = 30
 COLOR_WALL = 10
@@ -83,9 +81,10 @@ class ShiftAction(Action):
         return shift(state, self.effects[samples[0]]), self.costs[samples[0]]
 
 class Environment:
-    def __init__(self, width, height, actions) -> None:
+    def __init__(self, width, height, actions, safe=False) -> None:
         self.width = width
         self.height = height
+        self.safe = safe
         self.map = np.zeros((height, width))
         self.actions = [ShiftAction(name, costs, dist, effects) for name, costs, effects, dist in actions]
         self.start = State(0, self.height-1)
@@ -152,8 +151,8 @@ class Environment:
     def is_inside(self, state):
         return state.x >= 0 and state.x < self.width and state.y >=0 and state.y < self.height
     
-    def project(self, state, safe=SAFE):
-        if not safe:
+    def project(self, state):
+        if not self.safe:
             return state
         if self.is_inside(state):
             return state
@@ -195,9 +194,9 @@ class Environment:
     # def get_successors(self, state, action):
     #     return [self.project(s) for s in action.successors(state)]
     
-    def get_sampled_successor(self, state, action, execute=False, safe=SAFE):
+    def get_sampled_successor(self, state, action, execute=False):
         t, cost = action.sample(state)
-        if safe and self.is_wall(self.project(t)):
+        if self.safe and self.is_wall(self.project(t)):
             return state, cost
         return self.project(t), cost
 
@@ -211,7 +210,7 @@ class Environment:
             else:
                 return [self.get_sampled_successor(state, action, execute=False) for i in range(num_samples)]
         else:
-            succs = [self.project(s) for s in action.successors(state)]
+            succs = [state if self.safe and self.is_wall(self.project(s)) else self.project(s) for s in action.successors(state)]
             return succs
 
     def get_extrem_successor(self, state, action, worst=True, beta=0.1):

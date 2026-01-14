@@ -1,6 +1,6 @@
 import numpy as np
 
-TERMINAL_COST = 1
+TERMINAL_COST = 1000
 
 class Action:
     def __init__(self, name, source, targets, costs, distribution):
@@ -48,7 +48,7 @@ class Environment:
                 actions.append(a)
         return actions 
 
-    def get_sampled_successor(self, state, action, execute=False):
+    def get_sampled_successor(self, state, action, execute=False, safe=False):
         t, cost = action.sample()
         return t, cost
 
@@ -71,9 +71,9 @@ STATES = [0, 1, 2, 3, 4]
 TERMINALS = [4]
 GOALS = [2, 3]
 
-ACTIONS = [Action("a", 0, [1], [0.001], [1]),
-           Action("b", 0, [2], [0.003], [1]),
-           Action("c", 1, [3], [0.001], [1]),
-           Action("d", 1, [4], [0.001], [1])]
+ACTIONS = [Action("a", 0, [1], [1], [1]),
+           Action("b", 0, [2], [3], [1]),
+           Action("c", 1, [3], [1], [1]),
+           Action("d", 1, [4], [1], [1])]
 
 env = Environment(STATES, 0, ACTIONS, GOALS, TERMINALS)
