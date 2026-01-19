@@ -6,7 +6,11 @@ from tqdm import tqdm
 import test_env as test
 import lrtdp
 import matplotlib.pyplot as plt
+from copy import deepcopy
+import pandas as pd
 import planning
+import lucb_lrtdp as lucb
+import time
 
 def rollout_action(state, qfunc, state_visited, mode="exploration", exploration=1.41):
     actions = env.get_applicable(state)
@@ -17,7 +21,7 @@ def rollout_action(state, qfunc, state_visited, mode="exploration", exploration=
         best_action = None
         min_h = np.inf
         for a in actions:
-            h = get_heur_Q_value(state, a, env, vfunc_fixed, hfunc) - np.random.gumbel(0, 0.1)
+            h = get_heur_Q_value(state, a, env, vfunc_fixed, hfunc) - np.random.gumbel(0, 0.5)
             if h < min_h:
                 min_h = h
                 best_action = a
@@ -34,7 +38,7 @@ def rollout_action(state, qfunc, state_visited, mode="exploration", exploration=
         best_action = None
         min_h = np.inf
         for a in untried_actions:
-            h = get_heur_Q_value(state, a, env, vfunc_fixed, hfunc)
+            h = get_heur_Q_value(state, a, env, vfunc_fixed, hfunc) #- np.random.gumbel(0, 1)
             if h < min_h:
                 min_h = h
                 best_action = a
@@ -43,18 +47,20 @@ def rollout_action(state, qfunc, state_visited, mode="exploration", exploration=
     a, _ = qfunc.get_best_action(state, state_visited, mode=mode, exploration=exploration)
     return a
 
-def rollout(state, env, qfunc, state_visited, mode="exploration", max_iter=100, exploration=1.41):
+def rollout(state, env, qfunc, state_visited, mode="exploration", max_iter=1000, exploration=1.41):
     open = deque()
 
     s = state
     total_cost = 0
     k = 0 
-    while not env.is_terminal(s) and k<max_iter:
+    while not env.is_terminal(s) and total_cost<1000: #k<max_iter:
         a = rollout_action(s, qfunc, state_visited, mode=mode, exploration=exploration)
-        # if mode == "best" and (s, a) in qfunc.histograms:
-        #     t, cost = qfunc.histograms[(s, a)].sample()
-        # else:
-        t, cost = env.get_sampled_successor(s, a)
+        if a == None:
+            break
+        if mode == "best":
+            t, cost = qfunc.histograms[(s, a)].sample()
+        else:
+            t, cost = env.get_sampled_successor(s, a)
         open.append((s, a, cost, t))
         s = t 
         total_cost += cost
@@ -64,8 +70,10 @@ def rollout(state, env, qfunc, state_visited, mode="exploration", max_iter=100, 
         terminal_cost = env.get_terminal_cost(s)
     else:
         terminal_cost = heur(s, env, vfunc_fixed, hfunc)
+    # if mode == "best":
     # print(f"terminal: {terminal_cost}, total: {total_cost}, iterations: {k}")
-
+    # if total_cost >= 0:
+    #     print(open)
     return open, terminal_cost, total_cost+terminal_cost, k
 
 def update(trace, qfunc, state_visited, terminal_cost, init=0, discount=True):
@@ -77,49 +85,54 @@ def update(trace, qfunc, state_visited, terminal_cost, init=0, discount=True):
         else:
             state_visited[s] = init+1
         cost += c
-        qfunc.update(s, a, cost, t, init=init, discount=discount)
+        qfunc.update(s, a, cost, t, c, init=init, discount=discount)
     return 0
 
-def mcts(state, env, qfunc, iterations=80000, exploration=7, init=20, discount=True):
+def mcts(state, env, qfunc, iterations=80000, exploration=7, init=20, discount=True, log=False):
     state_visited = {}
-    pvals = np.zeros(iterations)
-    Nvals = np.zeros(iterations)
-    NEvals = np.zeros(iterations)
-    iter_vals = np.zeros(iterations)
-    cost_vals = np.zeros(iterations)
+    actions = env.get_applicable(state)
 
+    if log:
+        pvals = np.zeros((iterations, len(actions)))
+        tvals = np.zeros(iterations)
+        iter_vals = np.zeros(iterations)
+        cost_vals = np.zeros(iterations)
+
+    start = time.time()
     for i in tqdm(range(iterations)):
         trace, terminal_cost, total_cost, iter = rollout(state, env, qfunc, state_visited, 
                                                          mode="exploration", exploration=exploration)
         update(trace, qfunc, state_visited, terminal_cost, init=init, discount=discount)
 
-        iter_vals[i] = iter
-        cost_vals[i] = total_cost
-        if (state, env.actions[3]) in qfunc.values:
-            pvals[i] = qfunc.values[(state, env.actions[3])]
-        if (state, env.actions[1]) in qfunc.values:
-            Nvals[i] = qfunc.values[(state, env.actions[1])]
-        if (state, env.actions[5]) in qfunc.values:
-            NEvals[i] = qfunc.values[(state, env.actions[5])]
-            # if i % 5 == 0:
-            #     print(terminal_cost)
-            #     print(pvals[i])
+        if log:
+            for j, a in enumerate(actions):
+                pvals[i,j] = qfunc.evaluate(state, a)
+            tvals[i] = time.time()-start
+            iter_vals[i] = iter
+            cost_vals[i] = total_cost
 
     best_action, val = qfunc.get_best_action(state,state_visited, mode="best")
 
-    # plt.figure(2)
-    # plt.plot(range(1,iterations+1), iter_vals)
-    # plt.plot(range(1,iterations+1), cost_vals)
+    plt.figure(2)
+    plt.plot(range(1,iterations+1), iter_vals)
+    plt.xlabel('Iteration')
+    plt.ylabel('Rollout size')
+    plt.xscale('log')
+    # plt.yscale('log')
+    plt.show()
+    plt.figure(2)
+    plt.plot(range(1,iterations+1), cost_vals)
+    plt.xlabel('Iteration')
+    plt.ylabel('Rollout cost')
+    plt.xscale('log')
+    # plt.yscale('log')
 
-    # plt.figure(1)
-    if discount:
-        plt.plot(range(1,iterations+1), pvals, label="DUCT")
-    else:
-        # plt.plot(range(1,iterations+1), pvals, label="UCT")
-        plt.plot(range(1,iterations+1), pvals, label="E")
-        plt.plot(range(1,iterations+1), Nvals, label="N")
-        plt.plot(range(1,iterations+1), NEvals, label="NE")
-    return best_action, val
+    plt.show()
+    if log:
+        df = pd.DataFrame(pvals, columns=actions)
+        dft = pd.DataFrame(tvals, columns=['time'])
+        return df, dft
+
 
 def estimate(state, env, qfunc, state_visited):
     _, terminal_cost, total_cost, _ = rollout(state, env, qfunc, state_visited, mode="best")
@@ -136,23 +149,33 @@ def brue_update(trace, env, qfunc, state_visited):
             state_visited[s] = 1
         cost = estimate(t, env, qfunc, state_visited)
         cost += c
-        qfunc.update(s, a, cost, t)
+        qfunc.update(s, a, cost, t, c)
     return 0
 
-def brue(state, env, qfunc, iterations=2000):
+def brue(state, env, qfunc, iterations=2000, log=False):
     state_visited = {}
-    pvals = np.zeros(iterations)
+    actions = env.get_applicable(state)
 
+    if log:
+        pvals = np.zeros((iterations, len(actions)))
+        tvals = np.zeros(iterations)
+
+    start = time.time()
     for i in tqdm(range(iterations)):
-        trace, terminal_cost, total_cost, _ = rollout(state, env, qfunc, state_visited, mode="noise")
+        trace, terminal_cost, total_cost, _ = rollout(state, env, qfunc, state_visited, mode="uniform")
         brue_update(trace, env, qfunc, state_visited)
-        if (state, env.actions[3]) in qfunc.values:
-            pvals[i] = qfunc.values[(state, env.actions[3])]
+
+        if log:
+            for j, a in enumerate(actions):
+                pvals[i,j] = qfunc.evaluate(state, a)
+            tvals[i] = time.time() - start
 
     best_action, val = qfunc.get_best_action(state, state_visited, mode="best")
 
-    # print(qfunc.values)
-    plt.plot(range(1,iterations+1), pvals, label="BRUE")
+    if log:
+        df = pd.DataFrame(pvals, columns=actions)
+        dft = pd.DataFrame(tvals, columns=['time'])
+        return df, dft
     return best_action, val
 
 class Histogram:
@@ -194,7 +217,7 @@ class Qfunction:
     def weight_sum(self, n):
         return n*(n+1)/2
 
-    def update(self, state, action, cost, target, init=20, discount=True):
+    def update(self, state, action, cost, target, acost, init=20, discount=False):
         if (state, action) in self.pair_visited:
             n = self.pair_visited[(state, action)]
             # if state==self.env.start and action==self.env.actions[3]:
@@ -206,7 +229,7 @@ class Qfunction:
             # if state==self.env.start and action==self.env.actions[3]:
             #     print(f"Updated Value: {self.values[(state, action)]}")
             self.pair_visited[(state, action)] += 1
-            self.histograms[(state, action)].update(target, cost)
+            self.histograms[(state, action)].update(target, acost)
             # if state==self.env.start and action==self.env.actions[5]:
             #     print(f"Update value: {self.values[(state, action)]}")
             #     print(get_heur_Q_value(state, action, self.env, self.vfunc, self.hfunc), cost, init)
@@ -214,7 +237,7 @@ class Qfunction:
             h = get_heur_Q_value(state, action, self.env, self.vfunc, self.hfunc)
             self.values[(state, action)] = (h*init + cost)/(init+1)
             self.pair_visited[(state, action)] = init+1
-            self.histograms[(state, action)] = Histogram(target, cost)
+            self.histograms[(state, action)] = Histogram(target, acost)
             # if state==self.env.start and action==self.env.actions[5]:
             #     print(f"First value: {self.values[(state, action)]}")
             #     print(get_heur_Q_value(state, action, self.env, self.vfunc, self.hfunc), cost, init)
@@ -223,7 +246,7 @@ class Qfunction:
         min_h = np.inf
         best_action = None
         for a in self.env.get_applicable(state):
-            if True: #(state, a) in self.values:
+            if (state, a) in self.values:
                 h = self.evaluate(state, a) 
                 if mode == "exploration":
                     # print(exploration)
@@ -259,29 +282,31 @@ class Qfunction:
 
 
 def get_heur_Q_value(state, action, env, vfunc, hfunc):
-    succs = env.get_successors(state, action, sampled=True)
-    res = 0
-    for t, c in succs:
-        h = heur(t, env, vfunc, hfunc, player=1)
-        res += c + h
-    return res/len(succs)
+    # succs = env.get_successors(state, action, sampled=True, num_samples=50)
+    # res = 0
+    # for t, c in succs:
+    #     h = heur(t, env, vfunc, hfunc, player=1)
+    #     res += c + h
+    # return res/len(succs)
+    t, c = env.get_extrem_successor(state, action, worst=False, beta=0)
+    return heur(t, env, vfunc, hfunc)+c
 
 def heur(state, env, vfunc, hfunc, player=1):
-    # return planning.expected_astar(state, env, vfunc, hfunc, penalty=False, player=player)
+    return planning.expected_astar(state, env, vfunc, hfunc, penalty=False, player=player)
     # res = search.astar(state, env, vfunc, hfunc)
     # if res != None:
     #     return hfunc.evaluate(state)
     # else:
-    return env.heur(state)
+    # return env.heur(state)
 
 if __name__ == '__main__':
 
     np.random.seed(3)
-    plt.rcParams.update({'font.size': 18})
+    plt.rcParams.update({'font.size': 24})
     plt.rcParams['text.usetex'] = True
 
-    env = grid.Environment(7, 7, grid.ACTIONS, safe=True)
-    env.generate_map(type=3, noise=False, prob=0.05)
+    env = grid.Environment(10, 10, grid.ACTIONS, safe=True)
+    env.generate_map(type=0, noise=True, prob=0.05)
     env.display()
 
     # env = test.env
@@ -293,33 +318,84 @@ if __name__ == '__main__':
     qfunc = Qfunction(env, vfunc_fixed, hfunc)
 
     state = env.start
+    # for a in env.actions:
+    #     print(env.get_extrem_successor(state, a))
+    #     print(get_heur_Q_value(state, a, env, vfunc, hfunc))
+
     # lrtdp.lrtdp(state, env, vfunc, eps=0.01)
     # print(vfunc.get_best_action(state, debug=False))
     # print(vfunc.get_Q_value(state, env.actions[5]))
 
-
-    ITERATIONS = 4000
-    a, val = mcts(state, env, qfunc, iterations=ITERATIONS, discount=False, exploration=20)
-    print(a, val)
-
-    # qfunc = Qfunction(env, vfunc_fixed, hfunc)
-    # a, val = mcts(state, env, qfunc, iterations=ITERATIONS, discount=True, exploration=30)
+    ITERATIONS = 400
+    df_uct, dft_uct = mcts(state, env, qfunc, iterations=ITERATIONS, discount=False, exploration=60, log=True)
+    # print(a, val)
 
     # qfunc = Qfunction(env, vfunc_fixed, hfunc)
-    # a, val = brue(state, env, qfunc, iterations=ITERATIONS)
+    # df = mcts(state, env, qfunc, iterations=ITERATIONS, discount=True, exploration=2000, log=True)
 
-    for a in env.get_applicable(state):
-        if (state, a) in qfunc.values:
-            print(a, qfunc.values[(state, a)])
-            # print(get_heur_Q_value(state, a, env, vfunc_fixed, hfunc))
-    # qfunc.display_qfunc()
+    qfunc = Qfunction(env, vfunc_fixed, hfunc)
+    # df_brue, dft_brue = brue(state, env, qfunc, iterations=ITERATIONS, log=True)
+    # print(df)
+
+    vfunc = lucb.Vfunction(env, vfunc_fixed, hfunc, hfunc, heur_type="expected", confidence=0.1, eps=0.1)
+    df_lucb, dft_lucb = lucb.lrtdp(state, env, vfunc, eps=0.1, iterations=ITERATIONS, check=False, log=True)
+
+    # for a in env.get_applicable(state):
+    #     if (state, a) in qfunc.values:
+    #         print(a, qfunc.values[(state, a)])
+    #         # print(get_heur_Q_value(state, a, env, vfunc_fixed, hfunc))
+    # # qfunc.display_qfunc()
 
     plt.figure(1)
-    # plt.plot(range(1,ITERATIONS+1), 8.25*np.ones(ITERATIONS), label=r'$Q^*(s_0,E)$')
+    plt.plot(range(1,ITERATIONS+1), 14.33*np.ones(ITERATIONS), label=r'$Q^*(s_0,NE)$')
+    actions = env.get_applicable(state)
+    for i, a in enumerate(actions):
+        if a.name in [' N', 'NE', 'NW']:
+            plt.plot(range(1,ITERATIONS+1), df_uct[a], label=a)
+
     plt.xscale('log')
-    plt.yscale('log')
+    # plt.yscale('log')
     plt.xlabel('Iteration')
-    plt.ylabel(r'$\hat{Q}(s_0,E)$')
-    plt.legend(loc="upper right")    
+    plt.ylabel(r'$\hat{Q}$-values')
+    plt.legend(loc="upper left")    
+    plt.title('UCT')
     plt.show()
 
+    # plt.plot(range(1,ITERATIONS+1), 14.33*np.ones(ITERATIONS), label=r'$Q^*(s_0,NE)$')
+    # actions = env.get_applicable(state)
+
+    # for i, a in enumerate(actions):
+    #     if a.name in [' N', 'NE', 'NW']:
+    #         plt.plot(range(1,ITERATIONS+1), df_brue[a], label=a)
+
+    # plt.xscale('log')
+    # # plt.yscale('log')
+    # plt.xlabel('Iteration')
+    # plt.ylabel(r'$\hat{Q}$-values')
+    # plt.legend(loc="upper right")  
+    # plt.title('BRUE')  
+    # plt.show()
+
+    plt.plot(range(1,ITERATIONS+1), 14.33*np.ones(ITERATIONS), label=r'$Q^*(s_0,NE)$')
+    actions = env.get_applicable(state)
+    for i, a in enumerate(actions):
+        if a.name in [' N', 'NE', 'NW']:
+            plt.plot(range(1,ITERATIONS+1), df_lucb[a], label=a)
+
+    plt.xscale('log')
+    # plt.yscale('log')
+    plt.xlabel('Iteration')
+    plt.ylabel(r'$\hat{Q}$-values')
+    plt.legend(loc="lower right")  
+    plt.title('LUCB-RTDP')  
+    plt.show()
+
+    plt.plot(range(1,ITERATIONS+1), dft_uct, label='UCT')
+    # plt.plot(range(1,ITERATIONS+1), dft_brue, label='BRUE')
+    plt.plot(range(1,ITERATIONS+1), dft_lucb, label='LUCB-RTDP')
+    plt.xscale('log')
+    # plt.yscale('log')
+    plt.xlabel('Iteration')
+    plt.ylabel(r'time [s]')
+    plt.legend(loc="upper left")  
+    plt.show()

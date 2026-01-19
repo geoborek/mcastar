@@ -64,6 +64,15 @@ class Environment:
         else:
             return action.targets
         
+    def get_extrem_successor(self, state, action, worst=True, beta=0.1):
+        succs = self.get_successors(state, action)
+        vals = action.costs + np.array([self.heur(t) for t in succs]) 
+        if not worst:
+            vals = -vals 
+        # vals += np.random.gumbel(0, beta, len(succs))
+        i = np.argmax(vals)
+        return succs[i], action.costs[i]
+
     def heur(self, state):
         return 0
 
@@ -76,4 +85,13 @@ ACTIONS = [Action("a", 0, [1], [1], [1]),
            Action("c", 1, [3], [1], [1]),
            Action("d", 1, [4], [1], [1])]
 
+ACTIONS2 = [Action("a", 0, [1], [1], [1]),
+           Action("b", 0, [2], [3], [1]),
+           Action("c", 1, [3], [1], [1]),
+           Action("d", 1, [4], [1], [1]),
+           Action("e", 4, [1], [1], [1])
+           ]
+
 env = Environment(STATES, 0, ACTIONS, GOALS, TERMINALS)
+
+env2 = Environment(STATES, 0, ACTIONS2, GOALS, [])

@@ -11,7 +11,7 @@ COLOR_PATH = 40
 
 COST_WALL = 1000
 
-DIST = [0.8, 0.1, 0.1]
+DIST = [0.6, 0.2, 0.2]
 COSTS1 = [1, 1.414, 1.414]
 COSTS2 = [1.414, 1, 1]
 ACTIONS2 = [
@@ -87,7 +87,7 @@ class Environment:
         self.safe = safe
         self.map = np.zeros((height, width))
         self.actions = [ShiftAction(name, costs, dist, effects) for name, costs, effects, dist in actions]
-        self.start = State(0, self.height-1)
+        self.start = State(1, self.height-2)
         self.goals = [State(self.width-1, 1), # self.height//2 - 1), # 0),
                       State(self.width-1, 2), #self.height//2), # 1),
                       State(self.width-1, 3), #self.height//2 + 1), #2),
@@ -106,8 +106,8 @@ class Environment:
         
         if type == 0:
             # self.map[self.width // 2+4, 0:(2*self.width//3)] = COLOR_WALL
-            self.map[self.width // 2-4, 3:] = COLOR_WALL
-            self.map[(self.width // 2)-1:(self.width // 2)+1, :] = 0
+            self.map[3:, self.width // 2] = COLOR_WALL
+            # self.map[(self.width // 2)-1:(self.width // 2)+1, :] = 0
         elif type == 1:
             self.map[self.width // 2+1, 0:(2*self.width//3)] = COLOR_WALL
             self.map[self.width // 2-2, 3:] = COLOR_WALL
@@ -124,19 +124,29 @@ class Environment:
                           State(self.width-3, 3),
                         ]
         elif type==3:
-            self.start = State(0, self.height-1)
-            self.map[self.width // 2, 0:(2*self.width//3)] = COLOR_WALL
-            self.goals = [State(self.width-1, 0), 
+            self.start = State(2, self.height-2)
+            # self.map[self.width // 2, 0:(2*self.width//3)] = COLOR_WALL
+            self.goals = [State(self.width-1, 0),
                         State(self.width-1, 1),
                         State(self.width-1, 2)]
             # self.map[self.height-1, self.width-1] = COLOR_WALL
-
+        elif type==4:
+            self.start = State(self.width-2, self.height-2)
+            for i in range(4):
+                self.map[3:self.height-4,self.width-5-3*i] = COLOR_WALL
+            self.map[3,self.width-14:self.width] = COLOR_WALL
+            self.map[4,self.width-14:self.width] = COLOR_WALL
+            self.goals = [State(self.width-1, 0),
+                        State(self.width-1, 1),
+                        State(self.width-1, 2)]
+        
         self.map[self.start.y, self.start.x] = COLOR_START
         for state in self.goals:
             self.map[state.y, state.x] = COLOR_GOAL
 
     def display(self):
         plt.imshow(self.map)
+        plt.axis('off')
         plt.show()
 
     def display_path(self, path):
@@ -188,6 +198,16 @@ class Environment:
         if self.is_terminal(state):
             return []
         else:
+            # if self.safe:
+            #     actions = []
+            #     for a in self.actions:
+            #         is_ok = True
+            #         for t in a.successors(state):
+            #             if not self.is_inside(t) or self.is_wall(t):
+            #                 is_ok = False
+            #         if is_ok:
+            #             actions.append(a)
+            # else:
             actions = self.actions
             return actions
 
@@ -218,11 +238,15 @@ class Environment:
         vals = action.costs + np.array([self.heur(t) for t in succs]) 
         if not worst:
             vals = -vals 
-        vals += np.random.gumbel(0, beta, len(succs))
+        # vals += np.random.gumbel(0, beta, len(succs))
         i = np.argmax(vals)
         return succs[i], action.costs[i]
             
     def heur(self, state):
+        if self.is_goal(state):
+            return 0
+        elif self.is_terminal(state):
+            return 1000
         h = np.inf
         for g in self.goals:
             d = np.sqrt((state.x-g.x)**2 + (state.y-g.y)**2)
@@ -261,7 +285,7 @@ class Vfunction:
         min_h = np.inf
         best_action = None
         for a in self.env.get_applicable(state):
-            h = self.get_Q_value(state, a)
+            h = self.get_Q_value(state, a, debug=False)
             if debug:
                 print(f"Action: {a}")
                 print(f"Q-value: {h}")

@@ -13,7 +13,7 @@ import openspiel as sp
 MAX_PENALTY = 1000
 
 def expected_astar(state, env, vfunc, hfunc, penalty=True, noise=0.0, player=1):
-    if hfunc.is_done(state):
+    if hfunc.is_done(state) or env.is_terminal(state):
         return hfunc.evaluate(state)
     else:
         remaining_samples = hfunc.samples

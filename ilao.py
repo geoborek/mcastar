@@ -19,7 +19,6 @@ def build_closed_subset(initial_state, env, vfunc):
 
         best_action, _ = vfunc.get_best_action(state)
         policy[state] = best_action
-        # print(best_action)
         for s in env.get_successors(state, best_action):
             if s not in open and s not in closed and not env.is_terminal(s):
                 open.append(s)
@@ -174,10 +173,10 @@ if __name__ == '__main__':
 
     np.random.seed(3)
 
-    env = grid.Environment(7, 7, grid.ACTIONS, safe=True)
-    env.generate_map(type=3, noise=False, prob=0.05)
+    env = grid.Environment(20, 20, grid.ACTIONS, safe=False)
+    env.generate_map(type=4, noise=False, prob=0.05)
 
-    # env.display()
+    env.display()
 
     vfunc = grid.Vfunction(env)
     vfunc_fixed = grid.Vfunction(env)
@@ -185,7 +184,7 @@ if __name__ == '__main__':
 
     state = env.start
     ilao(state, env, vfunc, 0.001)
-    print(vfunc.get_best_action(state, debug=False))
+    print(vfunc.get_best_action(state, debug=True))
 
     vfunc.display_best_actions()
     vfunc.display_vfunc()
