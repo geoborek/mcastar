@@ -33,8 +33,8 @@ def rollout_action(state, qfunc, state_visited, mode="exploration", exploration=
             if (state, a) not in qfunc.pair_visited:
                 untried_actions.append(a)
 
-        # if len(untried_actions)>0:
-        #     return np.random.choice(untried_actions)        
+        if len(untried_actions)>0:
+            return np.random.choice(untried_actions)        
         best_action = None
         min_h = np.inf
         for a in untried_actions:
@@ -88,7 +88,7 @@ def update(trace, qfunc, state_visited, terminal_cost, init=0, discount=True):
         qfunc.update(s, a, cost, t, c, init=init, discount=discount)
     return 0
 
-def mcts(state, env, qfunc, iterations=80000, exploration=7, init=20, discount=True, log=False):
+def mcts(state, env, qfunc, iterations=80000, exploration=7, init=0, discount=True, log=False):
     state_visited = {}
     actions = env.get_applicable(state)
 
@@ -305,8 +305,8 @@ if __name__ == '__main__':
     plt.rcParams.update({'font.size': 24})
     plt.rcParams['text.usetex'] = True
 
-    env = grid.Environment(10, 10, grid.ACTIONS, safe=True)
-    env.generate_map(type=0, noise=True, prob=0.05)
+    env = grid.Environment(20, 20, grid.ACTIONS, safe=True)
+    env.generate_map(type=4, noise=False, prob=0.05)
     env.display()
 
     # env = test.env

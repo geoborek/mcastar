@@ -23,14 +23,6 @@ def back_propagate(state, parent, action, vfunc, hfunc):
     # plan.reverse()
     return c
 
-def back_propagate_dead_end(state, parent, action, vfunc, hfunc):
-    s = state
-    while s in parent:
-        a, cost = action[s]
-        s = parent[s]
-        # vfunc.values[s] = vfunc.get_Q_value(s, a)
-        # vfunc.Bellman_update(s)
-
 def astar(state, env, vfunc, hfunc, noise=0.0):
    
     gScore = {}
@@ -39,21 +31,13 @@ def astar(state, env, vfunc, hfunc, noise=0.0):
     open = pq.PQueue() #hd.heapdict()
 
     gScore[state] = 0
-
-    # Expand the initial state and compute expected costs for each action
-    actions = env.get_applicable(state)
-    for a in actions:
-        if vfunc.is_safe(state, a):
-            h = vfunc.get_Q_value(state, a)
-            open[(state, a)] = h + np.random.gumbel(0, noise)
-            # print(f"Action: {a}")
-            # print(f"Qval: {h}")
+    open[state] = vfunc.evaluate(state)
 
     # last_cost = 0
     k = 0
     # print(open.items())
     while open.items():
-        ((s, a), fScore) = open.popitem()
+        (s, fScore) = open.popitem()
         # print(f"State:\n{s}")
         # print(f"Is goal: {env.is_goal(s)}")
         # if env.is_goal(s):
@@ -62,37 +46,17 @@ def astar(state, env, vfunc, hfunc, noise=0.0):
         # print(f"fScore: {fScore}")
 
         if hfunc.is_done(s):
-            # r = np.random.random()
-            # if r<np.exp(-k-1):
-            #     new_cost = back_propagate(s, parent, action, vfunc, hfunc)
-            #     k += 1
-            #     last_cost = (last_cost*(k-1) + new_cost)/k
-            #     continue
-            # else:
-            # print(f"State:\n{s}")
             return back_propagate(s, parent, action, vfunc, hfunc)
-        
-        # for j in range(1):
-        t, cost = env.get_sampled_successor(s, a)
-        # t, cost = env.get_extrem_successor(s, a, worst=False, beta=0)
-        # print(f"Sampled state:\n{t}")
-        v = gScore[s] + cost
-        if not (t in gScore) or v < gScore[t]:
-            gScore[t] = v
-            parent[t] = s
-            action[t] = (a, cost)
-            if env.is_goal(t):
-                open[(t, None)] = v + vfunc.evaluate(t)
-            elif env.is_terminal(t):
-                # vfunc.display_vfunc()
-                back_propagate_dead_end(t, parent, action, vfunc, hfunc)
-                # vfunc.display_vfunc()
-            else:
-                for a in env.get_applicable(t):
-                    if vfunc.is_safe(t, a):
-                        h = vfunc.get_Q_value(t, a)
-                        open[(t, a)] = v + h - np.random.gumbel(0, noise)
 
+        for a in env.get_applicable(s):
+            if vfunc.is_safe(s, a):
+                t, cost = env.get_sampled_successor(s, a)
+                v = gScore[s] + cost
+                if not (t in gScore) or v < gScore[t]:
+                    gScore[t] = v
+                    parent[t] = s
+                    action[t] = (a, cost)
+                    open[t] = v + vfunc.evaluate(t)
     return None
 
 class Hfunction:

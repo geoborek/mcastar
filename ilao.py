@@ -173,8 +173,8 @@ if __name__ == '__main__':
 
     np.random.seed(3)
 
-    env = grid.Environment(20, 20, grid.ACTIONS, safe=False)
-    env.generate_map(type=4, noise=False, prob=0.05)
+    env = grid.Environment(10, 10, grid.ACTIONS, safe=True)
+    env.generate_map(type=0, noise=True, prob=0.05)
 
     env.display()
 

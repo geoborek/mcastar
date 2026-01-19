@@ -67,6 +67,7 @@ class Environment:
         self.actions = [Action(name, cost, effect, UNIFORM) for (name, cost, effect) in ACTIONS]
         self.start = (0, self.height-1, self.width//2, self.height//2)
         self.goals = [(self.width-1, 0)]
+        self.successors = {}
 
     def generate_map(self):
         # self.map = COLOR_WALL*np.random.binomial(1,0.05,(self.height, self.width))
@@ -127,7 +128,7 @@ class Environment:
     def is_terminal(self, state):
         return self.is_goal(state) or l2_distance((state[0], state[1]), (state[2], state[3]))<MIN_DISTANCE 
         
-    def get_terminal_cost(self, state):
+    def get_terminal_cost(self, state, player=1):
         if self.is_goal(state):
             return 0
         else:
@@ -140,12 +141,25 @@ class Environment:
             actions = self.actions
             return actions
 
-    def get_successors(self, state, action):
-        return [self.project(s) for s in action.successors(state)]
+    # def get_successors(self, state, action):
+    #     return [self.project(s) for s in action.successors(state)]
     
-    def get_sampled_successor(self, state, action):
+    def get_sampled_successor(self, state, action, execute=False):
         t, cost = action.sample(state)
         return self.project(t), cost
+
+    def get_successors(self, state, action, sampled=False, num_samples=20, cache=True):
+        if sampled:
+            if cache and (state, action) in self.successors:
+                return self.successors[(state, action)]
+            elif cache:
+                self.successors[(state, action)] = [self.get_sampled_successor(state, action, execute=False) for i in range(num_samples)]
+                return self.successors[(state, action)]
+            else:
+                return [self.get_sampled_successor(state, action, execute=False) for i in range(num_samples)]
+        else:
+            succs = [self.project(s) for s in action.successors(state)]
+            return succs
     
     def heur(self, state):
         h = np.inf
