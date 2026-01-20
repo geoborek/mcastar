@@ -139,7 +139,13 @@ class Environment:
             self.goals = [State(self.width-1, 0),
                         State(self.width-1, 1),
                         State(self.width-1, 2)]
-        
+        elif type==5:
+            self.map[self.width // 2+2, 0:(2*self.width//3)] = COLOR_WALL
+            self.map[self.width // 2-2, 3:] = COLOR_WALL
+            self.map[self.width // 2-2, :3] = 0
+            self.map[(self.width // 2)-1:(self.width // 2)+1, :] = 0
+            self.start = State(0, self.height-1)
+
         self.map[self.start.y, self.start.x] = COLOR_START
         for state in self.goals:
             self.map[state.y, state.x] = COLOR_GOAL

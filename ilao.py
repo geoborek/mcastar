@@ -173,8 +173,8 @@ if __name__ == '__main__':
 
     np.random.seed(3)
 
-    env = grid.Environment(10, 10, grid.ACTIONS, safe=True)
-    env.generate_map(type=0, noise=True, prob=0.05)
+    env = grid.Environment(20, 20, grid.ACTIONS, safe=False)
+    env.generate_map(type=5, noise=True, prob=0.05)
 
     env.display()
 
@@ -185,7 +185,7 @@ if __name__ == '__main__':
     state = env.start
     ilao(state, env, vfunc, 0.001)
     print(vfunc.get_best_action(state, debug=True))
-
+    print(vfunc.evaluate(state))
     vfunc.display_best_actions()
     vfunc.display_vfunc()
 
